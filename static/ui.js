@@ -262,6 +262,8 @@ function renderTrack(track) {
 
   const root = document.createElement('div');
   root.className = 'track panel';
+  root.style.setProperty('--inst-on', `var(--step-on-${instrument.color})`);
+  root.style.setProperty('--inst-glow', `var(--glow-${instrument.color})`);
 
   // Info column
   const infoCol = document.createElement('div');
@@ -269,7 +271,7 @@ function renderTrack(track) {
 
   infoCol.innerHTML = `
     <div class="track-header">
-      <span class="track-name color-${instrument.color}">${instrument.name}</span>
+      <span class="track-name color-${instrument.color}">${instrument.icon}${instrument.name}</span>
       <div class="track-buttons">
         <button class="claim-btn btn btn-sm"></button>
         <button class="default-btn btn btn-sm">Default</button>
@@ -413,6 +415,7 @@ function renderTrack(track) {
 
     muteBtn.disabled = !canEdit(track);
     removeBtn.disabled = !canEdit(track);
+    defaultBtn.disabled = !canEdit(track);
 
     claimBtn.hidden = !isOnline();
     claimBtn.disabled = track.owner === 'other';
@@ -450,7 +453,7 @@ instruments.forEach(instrument => {
   const btn = document.createElement('button');
 
   btn.className = `btn btn-sm add-btn color-${instrument.color}`;
-  btn.textContent = '+ ' + instrument.name;
+  btn.innerHTML = `${instrument.icon} + ${instrument.name}`;
 
   btn.addEventListener('click', () => addTrack(instrument));
 
