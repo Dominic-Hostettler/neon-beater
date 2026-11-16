@@ -4,8 +4,9 @@ import { audioCtx } from './synth.js';
 import { instruments } from './instruments/index.js';
 import {
   events, state, tracks, players, fitSteps, canEdit, play, stop, setBpm, shareTrack, resetSound,
-  claimTrack, releaseTrack, addTrack, removeTrack, NUM_STEPS, MAX_TRACKS,
+  claimTrack, releaseTrack, addTrack, addTrackValue, removeTrack, NUM_STEPS, MAX_TRACKS,
 } from './sequencer.js';
+import { beatTemplates } from './templates.js';
 import { connect, isOnline, roomId } from './net.js';
 import { saveState, loadState } from './storage.js';
 import { attachKnob } from './knobs.js';
@@ -255,6 +256,7 @@ function syncTracks() {
   });
 
   updateAddBar();
+  updateTplBar();
 }
 
 function renderTrack(track) {
@@ -472,6 +474,66 @@ function updateAddBar() {
   });
 }
 
+// ---------- Templates ----------
+
+const tplBar = document.getElementById('tplBar');
+
+// A template replaces every track, so it needs all of them editable
+// and always asks first: tracks, sounds, presets and tempo are lost.
+const tplConfirm = document.getElementById('tplConfirm');
+const tplConfirmName = document.getElementById('tplConfirmName');
+let tplPending = null;
+
+function applyTemplate(tpl) {
+  if (tracks.some(t => !canEdit(t))) return;
+  tracks.forEach(t => removeTrack(t));
+  tpl.tracks.forEach(t => addTrackValue({ instrument: t.instrument, params: t.params, steps: t.steps }));
+  if (tpl.bpm) {
+    if (isOnline()) setBpm(tpl.bpm);
+    else { state.transport.bpm = tpl.bpm; setBpmUI(tpl.bpm); }
+  }
+  saveState();
+}
+
+function updateTplBar() {
+  const locked = tracks.some(t => !canEdit(t));
+  tplBar.querySelectorAll('button').forEach(btn => {
+    btn.disabled = locked;
+    btn.title = locked
+      ? 'Release claimed instruments first'
+      : `Replace everything with the ${btn.dataset.name} template`;
+  });
+}
+
+beatTemplates.forEach(tpl => {
+  const btn = document.createElement('button');
+  btn.className = 'btn tpl-btn';
+  btn.dataset.name = tpl.name;
+  btn.textContent = tpl.name;
+  btn.title = `Replace everything with the ${tpl.name} template`;
+  btn.addEventListener('click', () => {
+    if (tracks.some(t => !canEdit(t))) return;
+    tplPending = tpl;
+    tplConfirmName.textContent = tpl.name;
+    tplConfirm.hidden = false;
+  });
+  tplBar.appendChild(btn);
+});
+
+function closeTplConfirm() {
+  tplConfirm.hidden = true;
+  tplPending = null;
+}
+
+document.getElementById('tplCancel').addEventListener('click', closeTplConfirm);
+document.getElementById('tplApply').addEventListener('click', () => {
+  const tpl = tplPending;
+  closeTplConfirm();
+  if (tpl) applyTemplate(tpl);
+});
+tplConfirm.addEventListener('click', e => { if (e.target === tplConfirm) closeTplConfirm(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeTplConfirm(); });
+
 // ---------- Controls ----------
 
 const playBtn = document.getElementById('playBtn');
@@ -518,6 +580,7 @@ events.addEventListener('transport', () => {
 
 events.addEventListener('track', e => {
   trackViews.get(e.detail.id)?.refresh();
+  updateTplBar();
   saveState();
 });
 
@@ -613,7 +676,7 @@ bpmInput.addEventListener('input', e => {
 // ---------- Keyboard shortcuts ----------
 
 document.addEventListener('keydown', e => {
-  if (!joinOverlay.hidden) return;
+  if (!joinOverlay.hidden || !tplConfirm.hidden) return;
 
   if (e.code === 'Space' || e.code === 'Enter') {
     if (
