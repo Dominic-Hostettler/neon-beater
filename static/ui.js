@@ -3,7 +3,7 @@
 import { audioCtx } from './synth.js';
 import { instruments } from './instruments/index.js';
 import {
-  events, state, tracks, fitSteps, canEdit, play, stop, setBpm, shareTrack, resetSound,
+  events, state, tracks, players, fitSteps, canEdit, play, stop, setBpm, shareTrack, resetSound,
   claimTrack, releaseTrack, addTrack, removeTrack, NUM_STEPS, MAX_TRACKS,
 } from './sequencer.js';
 import { connect, isOnline, roomId } from './net.js';
@@ -523,6 +523,31 @@ events.addEventListener('tracks', () => {
   saveState();
 });
 
+// ---------- Players ----------
+
+const playerCount = document.getElementById('playerCount');
+const playersList = document.getElementById('playersList');
+const playerColors = ['#00f5ff', '#22ff88', '#ff2d78', '#ffe600', '#a78bfa', '#fb923c', '#38bdf8', '#4ade80'];
+
+events.addEventListener('players', () => {
+  playerCount.textContent = players.length;
+  playersList.innerHTML = '';
+  if (!players.length) {
+    playersList.innerHTML = '<span class="empty-players">Waiting for DJs...</span>';
+    return;
+  }
+  players.forEach((p, i) => {
+    const badge = document.createElement('span');
+    badge.className = 'player-badge' + (p.me ? ' me' : '');
+    const dot = document.createElement('span');
+    dot.className = 'player-color';
+    dot.style.color = playerColors[i % playerColors.length];
+    badge.appendChild(dot);
+    badge.appendChild(document.createTextNode(p.me ? `${p.name} (you)` : p.name));
+    playersList.appendChild(badge);
+  });
+});
+
 // ---------- Play / Stop ----------
 
 playBtn.addEventListener('click', () => {
@@ -613,11 +638,42 @@ setBpmUI(state.transport.bpm);
 
 syncTracks();
 
-// Join room
+// Join room. The overlay's click doubles as the AudioContext gesture, so a
+// rejoin skips it and the first click or key unlocks audio instead.
+const joinedKey = 'simpelSamplerJoinedRoom';
+const nameKey = 'simpelSamplerName';
+let rejoin = false;
+try { rejoin = roomId && localStorage.getItem(joinedKey) === roomId; } catch (e) { /* storage blocked */ }
+
+function userName() {
+  try {
+    const n = localStorage.getItem(nameKey);
+    if (n) return n;
+  } catch (e) { /* storage blocked */ }
+  return document.getElementById('playerName').value.trim() || 'DJ';
+}
+
+const unlockAudio = () => { if (audioCtx.state !== 'running') audioCtx.resume(); };
+addEventListener('pointerdown', unlockAudio);
+addEventListener('keydown', unlockAudio);
+
 document.getElementById('joinBtn').addEventListener('click', async () => {
+  const name = userName();
+  try { localStorage.setItem(joinedKey, roomId); localStorage.setItem(nameKey, name); } catch (e) { /* storage blocked */ }
+
   await audioCtx.resume();
 
   joinOverlay.hidden = true;
 
-  connect();
+  connect(name);
 });
+
+// Enter in the name field joins too
+document.getElementById('playerName').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('joinBtn').click();
+});
+
+if (rejoin) {
+  joinOverlay.hidden = true;
+  connect(userName());
+}

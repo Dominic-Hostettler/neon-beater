@@ -350,7 +350,12 @@ body {
   width: 9px;
   height: 9px;
   border-radius: 50%;
+  background: currentColor;
   box-shadow: 0 0 10px currentColor;
+}
+
+.player-badge.me {
+  border-color: var(--neon);
 }
 
 .empty-players {

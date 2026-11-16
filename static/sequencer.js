@@ -25,6 +25,9 @@ export const state = {
 // Tracks in display order, by ID. track.instrument (a module from instruments/)
 // defines the sound and knobs; everything else is the track's own state.
 export const tracks = [];
+
+// Users in the room, from the server's players message: { name, me }.
+export const players = [];
 let owners = {}; // latest ownership view from the server, by track ID
 
 function ownerOf(id) {
@@ -296,6 +299,12 @@ listen({
       const id = trackIdOf(key);
       if (id !== null) applyTrackKey(id, field, value, own);
     }
+  },
+  players(list) {
+    players.splice(0, players.length, ...(Array.isArray(list) ? list : [])
+      .filter(p => p && typeof p.name === 'string')
+      .map(p => ({ name: [...p.name].slice(0, 24).join(''), me: p.me === true })));
+    events.dispatchEvent(new Event('players'));
   },
 });
 
